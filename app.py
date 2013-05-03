@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*- 
 
 from flask import Flask, redirect, render_template, send_file, url_for, request, flash, session, abort
+from flask.ext.mail import Mail, Message
 from werkzeug.utils import secure_filename
 from beefish import decrypt, encrypt
 import boto
@@ -10,19 +11,41 @@ from peewee import *
 import mimetypes
 import datetime
 import os.path
+import os
 
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
 DEBUG = True
-SECRET_KEY = "kas45hdas67dhkasd8aksd78ad7"
+SECRET_KEY = "djuhylcvjdxczbbjtoqbqbrlatvxxu"
 DATABASE = os.path.join(PROJECT_ROOT,'db.db')
 
-AWSID = '<your AWS key id>'
-AWSKEY = '<your AWS key secret>'
-AWSBUCKET = '<your bucket name>'
+AWSID = os.environ.get('AWSID')
+AWSKEY = os.environ.get('AWSKEY')
+AWSBUCKET = os.environ.get('AWSBUCKET')
 
 app = Flask(__name__)
 app.config.from_object(__name__)
 database = SqliteDatabase(DATABASE)
+mail=Mail(app)
+
+app.config.update(
+	DEBUG=True,
+	#EMAIL SETTINGS
+	MAIL_SERVER='smtp.gmail.com',
+	MAIL_PORT=465,
+	MAIL_USE_SSL=True,
+	MAIL_USERNAME = os.environ.get('MAIL_USERNAME'),
+	MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
+	)
+
+mail=Mail(app)
+
+def send_email(aws_path):
+	msg = Message('File uploaded',
+	              sender='charles.r.mccreary@gmail.com',
+	              recipients=
+                      ['charles.r.mccreary@gmail.com'])
+	msg.body = 'File {0} uploaded'.format(aws_path)
+	mail.send(msg)
 
 class File(Model):
     class Meta:
@@ -64,16 +87,18 @@ def upload_handler(instance, file_obj):
 
     file_obj.seek(0)
     key.set_contents_from_file(file_obj)
+    send_email(key.name)
 
 
 @app.route('/')
 def index():
+    #import pdb; pdb.set_trace()
     if request.args.get('folder',None):
         folder = request.args.get('folder')
         session['folder'] = os.path.join('/',folder)
     else:
         session['folder'] = '/'
-    files = File.filter(parent=session['folder']).order_by((File,'folder','DESC'),(File,'filename'))
+    files = File.select().where(File.parent == session['folder']).order_by(File.folder,File.filename)
     if session['folder'].endswith('/'):
         path=session['folder']
     else:
@@ -182,4 +207,4 @@ def search():
         return redirect(url_for('index')+'?folder=%s'%session['folder'])
 
 if __name__ == '__main__':
-    app.run()
+    app.run(host='0.0.0.0')
