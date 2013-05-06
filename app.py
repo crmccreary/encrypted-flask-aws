@@ -39,12 +39,12 @@ app.config.update(
 
 mail=Mail(app)
 
-def send_email(aws_path):
-	msg = Message('File uploaded',
+def send_email(subject, body):
+	msg = Message(subject,
 	              sender='charles.r.mccreary@gmail.com',
 	              recipients=
                       ['charles.r.mccreary@gmail.com'])
-	msg.body = 'File {0} uploaded'.format(aws_path)
+	msg.body = body
 	mail.send(msg)
 
 class File(Model):
@@ -87,7 +87,8 @@ def upload_handler(instance, file_obj):
 
     file_obj.seek(0)
     key.set_contents_from_file(file_obj)
-    send_email(key.name)
+    send_email(subject= 'File uploaded', 
+               body = 'File {0} uploaded'.format(key.name))
 
 
 @app.route('/')
@@ -152,6 +153,8 @@ def download(file_id):
     enc_buffer.seek(0)
 
     if not file.encrypted:
+        send_email(subject= 'File downloaded', 
+                   body = 'Unencrypted file {0} downloaded'.format(key_obj.name))
         return send_file(
             enc_buffer,
             file.get_mimetype(),
@@ -167,6 +170,8 @@ def download(file_id):
         dec_buffer.seek(0)
 
         # efficiently send the decrypted file as an attachment
+        send_email(subject= 'File downloaded', 
+                   body = 'Encrypted file {0} downloaded'.format(key_obj.name))
         return send_file(
             dec_buffer,
             file.get_mimetype(),
@@ -199,7 +204,7 @@ def delete(file_id):
 @app.route('/search/')
 def search():
     if request.args.get('q',None):
-        files = File.filter(filename__icontains=request.args.get('q')).order_by((File,'folder','DESC'),(File,'filename'))
+        files = File.select().where(File.filename % request.args.get('q')).order_by(File.folder,File.filename)
         if files.count() == 0:
             files=None
         return render_template('search_results.html', files=files)
